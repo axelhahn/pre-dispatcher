@@ -6,10 +6,12 @@
 
 The preDispatcher is a cache in front of a slow website delivery/ cms. Initially it was created for my website with Concrete5. But it could be used for other products too.
 
-In my use case Concrete5 needed about 1.5 sec for a non cached page ... and still 200 ms to deliver a full page cached content. The footprint for the bootstrap process is quite high. This pre-dispatcher catches a request and puts it to a cache. It deliveres the local cahce file for a given time. So delivering the content starts in 1 ms (istead of 200 ms).
+To see the real life example: go to https://www.axel-hahn.de/ and navigate around.
+
+In my use case Concrete5 needed about 1.5 sec for a non cached page ... and still 200 ms to deliver a website with enabled "full page" cached content. The footprint for the bootstrap process is quite high. This pre-dispatcher catches a request and puts it to a cache. It deliveres the local cache file for a given time. So delivering the content starts in 1 ms (instead of 200 ms).
 
 Author: Axel Hahn
-
+Source: https://github.com/axelhahn/pre-dispatcher
 
 ## Licence ##
 
@@ -20,6 +22,20 @@ GNU General Public License (GNU GPL) version 3
 ## Requirements ##
 
 PHP 7
+Means: only plain php - no database, no special modules.
+
+
+## Features ##
+
+* It is a fast full page cache for GET requests to handle slow backends. Other request methods won't be cached.
+* Caching of pages with GET parameters (you need to define exclusions of variable names if not to cache them)
+* Minimal requirements: it can be used on any shared hoster (it just needs file access - no database, no other service or module)
+* automatic deletion of cached entries (if you are in a backend: define cookie or session variable names to delete a page cache)
+* Delete a single file to flush all cache entries
+* debugging features to follow the behaviour:
+   * enable/ disable debugging
+   * limit visibility of debug infos to defined ip addresses
+   * write debug into http response header and/ or as html code
 
 
 ## Installation ##
@@ -35,14 +51,17 @@ PHP 7
   * go to the ttl section and set the caching time for your requests. You can set a default and then override it by adding a list of regex to requests and its wanted caching times
   * if you have a CMS or other backend: you can define how to detect that a backend is open. Set a cookie variable name or session variable name in the __delcache__ section. This will delete a cache for an opened page if you are logged in.
   * The __nocache__ section - a request won't be stored in the cache if one of its conditions was found
+* Cleanup the cache directory: enable a job that runs the cleanup.php (it deletes cache files > 14d) or 
 
 ### Instructions for Concrete5 ###
 
-This pre-dispatcher was tested for public only pages that have no user specific information in the response.
+It acts like a full page cache and is placed before any C5 bootstrap action. This is why it is fast.
+This pre-dispatcher was tested for public only pages (that have no user specific content in the response).
+
 The config dist file is prepared to detect a login to the C5 backend by a cookie named "CONCRETE5_LOGIN" in the delcache section. 
 
 * Extract the files below [webroot]/application/pre_dispatcher/
-* in the [webroot]/index.php add an include to the pre_dispatcher/index.php:
+* in the [webroot]/index.php add an include line to the pre_dispatcher/index.php:
 
 ``` php
 <?php
@@ -53,7 +72,7 @@ require 'concrete/dispatcher.php';
 * go to [webroot]/application/pre_dispatcher/
 * copy pre_dispatcher_config.dist.php to pre_dispatcher_config.php
 * make your changes in the created config
-
+* Enable the cleanup
 
 ## Config entries ##
 
