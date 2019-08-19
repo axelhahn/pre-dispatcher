@@ -77,4 +77,12 @@
 				'<b>Warning</b>:.*on line <b>',
 			),
 		),
+		// ------------------------------------------------------------
+		// ignore existing cache and store a cached version if I find ...
+		'refreshcache'=>array(
+			// a get variable name
+			'get'=>array(
+				'rebuildcache',
+			),
+		),
 	);

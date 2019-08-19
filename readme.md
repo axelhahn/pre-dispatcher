@@ -13,6 +13,13 @@ In my use case Concrete5 needed about 1.5 sec for a non cached page ... and stil
 Author: Axel Hahn
 Source: https://github.com/axelhahn/pre-dispatcher
 
+
+## Status ##
+
+ALPHA ... it is used on my own website. 
+I need to abstract it to make it usable for other tools.
+
+
 ## Licence ##
 
 This is free software and Open Source 
@@ -31,7 +38,8 @@ Means: only plain php - no database, no special modules.
 * Caching of pages with GET parameters (you need to define exclusions of variable names if not to cache them)
 * Minimal requirements: it can be used on any shared hoster (it just needs file access - no database, no other service or module)
 * automatic deletion of cached entries (if you are in a backend: define cookie or session variable names to delete a page cache)
-* Delete a single file to flush all cache entries
+* Delete or touch a single file to flush all older cache entries (i.e. for changes in a layout template)
+* force the refresh of a cached content
 * debugging features to follow the behaviour:
    * enable/ disable debugging
    * limit visibility of debug infos to defined ip addresses
@@ -43,6 +51,7 @@ Means: only plain php - no database, no special modules.
 ### General instruction ###
 
 * Extract the files in any wanted directory of your webroot
+* For Non Concrete5 projects: copy the [path/predispatcher]/index.php and adapt a few lines in the last section "run normal request" for your tool
 * in your main dispatcher add an include to the [path/predispatcher]/index.php
 * go to [path/predispatcher]
 * copy pre_dispatcher_config.dist.php to pre_dispatcher_config.php
@@ -159,6 +168,14 @@ This is the dist file:
 			'body'=>array(
 				'<b>Notice</b>:.*on line <b>',
 				'<b>Warning</b>:.*on line <b>',
+			),
+		),
+		// ------------------------------------------------------------
+		// ignore existing cache and store a cached version if I find ...
+		'refreshcache'=>array(
+			// a get variable name
+			'get'=>array(
+				'rebuildcache',
 			),
 		),
 	);

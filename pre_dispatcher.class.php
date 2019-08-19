@@ -76,6 +76,7 @@ class preDispatcher{
 
 		// set minimal vars
 		$this->_sRequest=$_SERVER['REQUEST_URI'];
+		$this->addInfo($this->_sRequest);
 		$this->_sCachefile=$this->getCachefile();
 
 		$this->_sCacheRemovefile=$this->aCfgCache['cache']['dir'].'/__remove_me_to_make_all_caches_invalid__';
@@ -309,10 +310,13 @@ class preDispatcher{
 	public function getCachefile(){
 		$sReturn='';
 
+		// remove ending "?" in the request
+		$this->_sRequest=preg_replace('/\?$/', '', $this->_sRequest);
+		// $this->addInfo('using req ' . $this->_sRequest);
 		if(isset($this->aCfgCache['cache']['readable']) && $this->aCfgCache['cache']['readable']){
 			$sCacheFile=str_replace(
-				array('\\', '?', '&', '='),
-				array('/',  '/', '&', '/'),
+				array('\\', '?', '&', '=', '//'),
+				array('/',  '/', '&', '/', '/'),
 				$this->_sRequest
 			);
 		} else {
@@ -333,7 +337,7 @@ class preDispatcher{
 		// $this->addInfo('ttl default = '.$iTtl.'s');
 		foreach($this->aCfgCache['ttl'] as $sRegex => $iValue){
 			// $this->addInfo('... test '.$sRegex);
-			if (preg_match("|$sRegex|", $this->_sRequest)){
+			if (preg_match("#$sRegex#", $this->_sRequest)){
 				// $this->addInfo('...... matched --> set ttl to '.$iValue);
 				$iTtl=$iValue;
 			}
@@ -362,6 +366,12 @@ class preDispatcher{
 	 * @return boolean (false)
 	 */
 	public function getCachedContent(){
+
+		if($this->isRefresh()){
+			$this->addInfo('Using Cache = NO (refreshing it)');
+			return false;
+		}
+
 		if(
 			file_exists($this->_sCachefile) 
 			&& is_file($this->_sCachefile)
@@ -433,10 +443,40 @@ class preDispatcher{
 		$this->addInfo('Cache-exists = true');
 		$this->addInfo('Cache-age = '.$iAgeOfCache.'s');
 		$iTtl=$this->getCacheTtl($this->_sRequest);
+		if(!$iTtl){
+			$this->deleteCache();
+		}
 		$this->addInfo('expired: '.($iAgeOfCache>$iTtl ? 'YES':'no ('.($iTtl-$iAgeOfCache).'s left)'));
 		return $iAgeOfCache>$iTtl;
 	}
 
+	/**
+	 * check if the current request is a refresh of a cache
+	 *
+	 * @return boolean
+	 */
+	public function isRefresh(){
+		$bRefresh=false;
+		if(isset($this->aCfgCache['refreshcache']['get'])){
+			foreach($this->aCfgCache['refreshcache']['get'] as $sEntry){
+				if(isset($_GET[$sEntry])){
+					$this->addInfo('check refresh - found GET var ['.$sEntry.'] = ' . $_GET[$sEntry]);
+					$this->_sRequest=str_replace($sEntry.'='.$_GET[$sEntry], '', $this->_sRequest);
+					unset($_GET[$sEntry]);
+					$bRefresh=true;
+				}
+			}
+		}
+		if($bRefresh){
+			$this->_sRequest=str_replace(
+				array('?&', '&&'), 
+				array('?',  '&'), 
+				$this->_sRequest
+			);
+			$this->_sCachefile=$this->getCachefile();
+		}
+		return $bRefresh;
+	}
 	/**
 	 * delete cache item
 	 *
