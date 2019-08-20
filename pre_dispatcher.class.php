@@ -24,12 +24,12 @@ class preDispatcher{
 	/**
 	 * @var array config values
 	 */
-	var $aCfgCache=array();
+	protected $aCfgCache=array();
 
 	/**
 	 * @var array  messages for debugging
 	 */
-	var $aMsg=array(); 
+	protected $aMsg=array(); 
 
     /**
      * fileextension for storing cachefiles (without ".")
@@ -37,10 +37,10 @@ class preDispatcher{
      */
     protected $_sCacheExt = 'cache';
 
-	var $_sRequest=false; 
-	var $_sCachefile=false; 
-	var $_sCacheRemovefile=false; 
-	var $_bDebug=false;
+	protected $_sRequest=false; 
+	protected $_sCachefile=false; 
+	protected $_sCacheRemovefile=false; 
+	protected $_bDebug=false;
 
 	// --------------------------------------------------------------------------------
 	// CONSTRUCTOR
@@ -76,7 +76,6 @@ class preDispatcher{
 
 		// set minimal vars
 		$this->_sRequest=$_SERVER['REQUEST_URI'];
-		$this->addInfo($this->_sRequest);
 		$this->_sCachefile=$this->getCachefile();
 
 		$this->_sCacheRemovefile=$this->aCfgCache['cache']['dir'].'/__remove_me_to_make_all_caches_invalid__';
@@ -417,13 +416,6 @@ class preDispatcher{
 		if(!$this->_checkCfgKey('nocache',$sContent)){
 			$bReturn=false;
 		}
-		$sCacheDir=dirname($this->_sCachefile);
-		if(!is_dir($sCacheDir)){
-			if(!@mkdir($sCacheDir, 0755, true)){
-				$this->addInfo('ERROR: unable to create cache dir');
-				$bReturn=false;
-			}
-		}
 		return $bReturn;
 	}
 
@@ -501,11 +493,18 @@ class preDispatcher{
 	public function doCache($sContent){
 
 		// ensure if cachable *with* content check
-		if(!$this->isCachable($sContent)){
+		if(!$this->isCachable($sContent) || !$this->getCacheTtl()){
 			$this->addInfo('Request is not cachable');
 			return false;
 		}
 
+		$sCacheDir=dirname($this->_sCachefile);
+		if(!is_dir($sCacheDir)){
+			if(!@mkdir($sCacheDir, 0755, true)){
+				$this->addInfo('ERROR: unable to create cache dir');
+				$bReturn=false;
+			}
+		}
 		$this->addInfo('store as cache item');
 		return file_put_contents($this->_sCachefile, $sContent);
 	}

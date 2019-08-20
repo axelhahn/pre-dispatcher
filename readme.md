@@ -5,6 +5,7 @@
 ## Description ##
 
 The preDispatcher is a cache in front of a slow website delivery/ cms. Initially it was created for my website with Concrete5. But it could be used for other products too.
+It is written for websites running on a shared hosting where people cannot install caching services like varshish.
 
 To see the real life example: go to https://www.axel-hahn.de/ and navigate around.
 
@@ -29,7 +30,7 @@ GNU General Public License (GNU GPL) version 3
 ## Requirements ##
 
 PHP 7
-Means: only plain php - no database, no special modules.
+Means: just plain PHP - no database, no special modules.
 
 
 ## Features ##
