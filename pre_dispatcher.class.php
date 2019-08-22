@@ -42,6 +42,10 @@ class preDispatcher{
 	protected $_sCacheRemovefile=false; 
 	protected $_bDebug=false;
 
+	protected $_sCacheSubdir='data'; 
+	protected $_sQueueSubdir='queue'; 
+	protected $_iQueueLevel=75; 
+
 	// --------------------------------------------------------------------------------
 	// CONSTRUCTOR
 	// --------------------------------------------------------------------------------
@@ -54,33 +58,38 @@ class preDispatcher{
 		$this->aCfgCache=@include('pre_dispatcher_config.php');
 
 		// check debug
-		if(isset($this->aCfgCache['debug']['enable']) && $this->aCfgCache['debug']['enable']){
-			if(
-				isset($this->aCfgCache['debug']['ip'])
-				&& is_array($this->aCfgCache['debug']['ip'])
-				&& count($this->aCfgCache['debug']['ip'])
-			){
-				$sIp=$_SERVER['REMOTE_ADDR'];
-				// die($sIp);
-				foreach($this->aCfgCache['debug']['ip'] as $sPattern){
-					// $this->addInfo('... test debug ip '.$sPattern.' vs pattern '.$sPattern);
-					if(preg_match('#'.$sPattern.'#', $sIp)){
-						// $this->addInfo('...... matched');
-						$this->_bDebug=true;
+		if(isset($_SERVER['REQUEST_URI'])){
+			if(isset($this->aCfgCache['debug']['enable']) && $this->aCfgCache['debug']['enable']){
+				if(
+					isset($this->aCfgCache['debug']['ip'])
+					&& is_array($this->aCfgCache['debug']['ip'])
+					&& count($this->aCfgCache['debug']['ip'])
+				){
+					$sIp=$_SERVER['REMOTE_ADDR'];
+					// die($sIp);
+					foreach($this->aCfgCache['debug']['ip'] as $sPattern){
+						// $this->addInfo('... test debug ip '.$sPattern.' vs pattern '.$sPattern);
+						if(preg_match('#'.$sPattern.'#', $sIp)){
+							// $this->addInfo('...... matched');
+							$this->_bDebug=true;
+						}
 					}
+				} else {
+					$this->_bDebug=true;
 				}
-			} else {
-				$this->_bDebug=true;
 			}
-		}
 
-		// set minimal vars
-		$this->_sRequest=$_SERVER['REQUEST_URI'];
-		$this->_sCachefile=$this->getCachefile();
+			// set minimal vars
+			$this->_sRequest=$_SERVER['REQUEST_URI'];
+			$this->_sCachefile=$this->getCachefile();
 
-		$this->_sCacheRemovefile=$this->aCfgCache['cache']['dir'].'/__remove_me_to_make_all_caches_invalid__';
-		if(!file_exists($this->_sCacheRemovefile)){
-			touch($this->_sCacheRemovefile);
+			$this->_sCacheRemovefile=$this->aCfgCache['cache']['dir'].'/__remove_me_to_make_all_caches_invalid__';
+			if(!file_exists($this->_sCacheRemovefile)){
+				touch($this->_sCacheRemovefile);
+			}
+
+			$this->sDeleteKey='__delete_'.md5($_SERVER['HTTP_HOST']);
+			$this->aCfgCache['refreshcache']['get'][]=$this->sDeleteKey;
 		}
 
 		return true;
@@ -322,8 +331,14 @@ class preDispatcher{
 			$sCacheFile=preg_replace('/([0-9a-f]{6})/', "$1/", md5($this->_sRequest));
 		}
 
-		// $this->addInfo('filename = '.$sCacheFile);
-		return $this->aCfgCache['cache']['dir'].'/'.$sCacheFile.'.'.$this->_sCacheExt;
+		$sCacheFile.='.'.$this->_sCacheExt;
+		$sCacheFile=str_replace(
+			'/.'.$this->_sCacheExt,
+			'.'.$this->_sCacheExt, 
+			$sCacheFile
+		);
+		$this->addInfo('cachefile = '.$sCacheFile);
+		return $this->aCfgCache['cache']['dir'].'/'.$this->_sCacheSubdir.'/'.$sCacheFile;
 	}
 
 	/**
@@ -435,10 +450,20 @@ class preDispatcher{
 		$this->addInfo('Cache-exists = true');
 		$this->addInfo('Cache-age = '.$iAgeOfCache.'s');
 		$iTtl=$this->getCacheTtl($this->_sRequest);
+		$bExpired=$iAgeOfCache>$iTtl;
 		if(!$iTtl){
 			$this->deleteCache();
+		} else{
+			if(!$bExpired){
+				$iLiftime=round($iAgeOfCache/$iTtl*100);
+				$this->addInfo('lifetime '.$iLiftime.'%');
+				if($iLiftime>$this->_iQueueLevel){
+					$this->doQueue();
+				}
+			}
 		}
-		$this->addInfo('expired: '.($iAgeOfCache>$iTtl ? 'YES':'no ('.($iTtl-$iAgeOfCache).'s left)'));
+
+		$this->addInfo('expired: '.($bExpired ? 'YES':'no ('.($iTtl-$iAgeOfCache).'s left)'));
 		return $iAgeOfCache>$iTtl;
 	}
 
@@ -484,6 +509,7 @@ class preDispatcher{
 		}
 		return false;
 	}
+
 	/**
 	 * store content as cache item
 	 *
@@ -509,5 +535,59 @@ class preDispatcher{
 		return file_put_contents($this->_sCachefile, $sContent);
 	}
 
+	// --------------------------------------------------------------------------------
+	//
+	// queue
+	//
+	// --------------------------------------------------------------------------------
+	/**
+	 * queue the current request; called in isExpired
+	 * @see isExpired
+	 *
+	 * @return boolean
+	 */
+	public function doQueue(){
+		$this->addInfo('need to renew soon.');
+		$sRenewDir=$this->aCfgCache['cache']['dir'].'/'.$this->_sQueueSubdir.'/';
+		$sFile=$sRenewDir.'/'.md5($this->_sRequest);
+
+		if(file_exists($sFile)){
+			$this->addInfo('was queued already.');
+			return true;
+		}
+
+		if(!is_dir($sRenewDir)){
+			if(!@mkdir($sRenewDir, 0755, true)){
+				$this->addInfo('ERROR: unable to create renew dir');
+				$bReturn=false;
+			}
+		}
+		$sUrl=$_SERVER['REQUEST_SCHEME'].'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
+		$sUrl.=(strstr($sUrl, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
+		return file_put_contents($sFile, $sUrl);
+	}
+	/**
+	 * queue the current request; called in isExpired
+	 * @see isExpired
+	 *
+	 * @return boolean
+	 */
+	public function readQueue(){
+		$aItems=array();
+		$sDir=$this->aCfgCache['cache']['dir'].'/'.$this->_sQueueSubdir.'/';
+
+        if (!($d = dir($sDir))) {
+		}
+		while ($entry = $d->read()) {
+            $sEntry = $sDir . "/" . $entry;
+            if (is_file($sEntry)) {
+				$aItems[]=array(
+					'file'=>$sEntry,
+					'url'=>file_get_contents($sEntry),
+				);
+			}
+		}
+		return $aItems;
+	}
 }
 
