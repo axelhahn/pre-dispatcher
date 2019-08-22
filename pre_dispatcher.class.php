@@ -57,6 +57,8 @@ class preDispatcher{
 		// load config
 		$this->aCfgCache=@include('pre_dispatcher_config.php');
 
+		// echo '<pre>'.print_r($_SERVER,1).'</pre>';
+
 		// check debug
 		if(isset($_SERVER['REQUEST_URI'])){
 			if(isset($this->aCfgCache['debug']['enable']) && $this->aCfgCache['debug']['enable']){
@@ -562,7 +564,7 @@ class preDispatcher{
 				$bReturn=false;
 			}
 		}
-		$sUrl=$_SERVER['REQUEST_SCHEME'].'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
+		$sUrl='http'.(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 's' : '') .'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
 		$sUrl.=(strstr($sUrl, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
 		return file_put_contents($sFile, $sUrl);
 	}
