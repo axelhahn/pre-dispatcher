@@ -33,7 +33,12 @@
 
 	function handleOutput($buffer){ 
 		global $oAhd;
-		$oAhd->doCache($buffer);
+		
+		$oAhd->doCache(array(
+			'url'=>$oAhd->getRefreshUrl(),
+			'header'=>apache_request_headers(),
+			'content'=>$buffer,
+		));
 		$buffer=str_replace(
 			'</body',
 			$oAhd->renderHeaders().'</body',

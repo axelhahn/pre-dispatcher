@@ -16,7 +16,8 @@
  */
 
 require_once('pre_dispatcher.class.php');
-
+require_once('cache.class.php');
+$iLifetimeBelow=60*60*4;
 
 // ----------------------------------------------------------------------
 // FUNCTIONS
@@ -46,19 +47,31 @@ require_once('pre_dispatcher.class.php');
 // MAIN
 // ----------------------------------------------------------------------
 
+    $iScriptStart=microtime(true);
     echo "\n";
     echo "PREDISPATCHER :: REFRESH - ".date("Y-m-d H:i:s")."\n";
     echo "\n";
 
-    $oAhd=new preDispatcher();    
-    $aItems=$oAhd->readQueue();
-    echo "Found urls to refresh: ".count($aItems)."\n\n";
+    $oAhd=new preDispatcher(); 
+    
+    $aItems=$oAhd->getListOfCachefiles(array(
+        'lifetimeBelow'=>$iLifetimeBelow,
+    ));
+    echo "Found urls to refresh (lifetime < $iLifetimeBelow sec): ".count($aItems)."\n\n";
 
     if (count($aItems)){
+        $iCounter=0;
         foreach($aItems as $aItem){
-            echo date("Y-m-d H:i:s") .' | '. $aItem['url']."... \n";
-            $res=httpGet($aItem['url']);
-            echo '    ' . (unlink($aItem['file']) ? 'OK: deleted from queue' : 'ERROR: unable to delete ['.$aItem['file'].'] from queue') . "\n";
+            $iCounter++;
+
+            $oCacheItem=new AhCache($aItem['module'], $aItem['cacheid']); 
+            $aData=$oCacheItem->read();
+            
+            echo date("H:i:s") .' | '. $iCounter . " | " . $aItem['_lifetime'].'s left | '. $aData['url']."... ";
+            $iStart=microtime(true);
+            $res=httpGet($aData['url']);
+            echo " (".(number_format(microtime(true)-$iStart, 3))."s)\n";
         }
     }
+    echo "\nTotal time: ".(number_format(microtime(true)-$iScriptStart, 3))."s\n";
     echo "Bye.\n";

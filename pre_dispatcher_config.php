@@ -13,6 +13,8 @@
 			// limit debug output to given ips
 			'ip'=>array(
 				'127.0.0.1',
+				'77.58.182.34',
+				'130.92.79.49',
 			),
 		),
 
@@ -20,11 +22,15 @@
 		'ttl'=>array(
 
 			// default caching time in [s]
-			'_default'=>60*60*24*14,
+			'_default'=>0,
+
+			// a default with whitelisting
+			'^/(startseite|batch|projects|music|kiste|suche|login)[a-zA-Z0-9\?\&\%\_\-\=\/\.]*'=>60*60*24*14,
 
 			// regex of request uri to override a default
-			'^/my/more/dynamic/page$'=>60*60,
-			'^/some/nother/pages/.*'=>60*15,
+			'^/startseite$'=>60*60,
+			'^/kiste/rss-news/[a-z\-]*'=>60*60,
+			'^/kiste/werkzeuge/[a-z\-]*'=>0,
 		),
 
 		// ------------------------------------------------------------
@@ -41,10 +47,12 @@
 			'session'=>array(),
 
 			// a get variable name
-			'get'=>array(),
+			'get'=>array(),	
 
 			// text/ regex in content
 			'body'=>array(
+				'Die\ Seite\ konnte\ nicht\ gefunden\ werden\.',
+				'Page Not Found',
 				'Page Not Found',
 			),
 		),
@@ -60,6 +68,7 @@
 
 			// a get variable name
 			'get'=>array(
+				'remark_',
 				'nocache',
 			),
 
@@ -69,11 +78,10 @@
 				'<b>Warning</b>:.*on line <b>',
 			),
 		),
-		// ------------------------------------------------------------
-		// ignore existing cache and store a cached version if I find ...
 		'refreshcache'=>array(
 			// a get variable name
 			'get'=>array(
+				'remark',
 				'rebuildcache',
 			),
 		),

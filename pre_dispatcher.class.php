@@ -15,6 +15,7 @@
  * 
  */
 
+require_once 'cache.class.php';
 class preDispatcher{
 
 	// --------------------------------------------------------------------------------
@@ -38,13 +39,9 @@ class preDispatcher{
     protected $_sCacheExt = 'cache';
 
 	protected $_sRequest=false; 
-	protected $_sCachefile=false; 
-	protected $_sCacheRemovefile=false; 
 	protected $_bDebug=false;
 
-	protected $_sCacheSubdir='data'; 
-	protected $_sQueueSubdir='queue'; 
-	protected $_iQueueLevel=75; 
+	protected $_oCache=false; 
 
 	// --------------------------------------------------------------------------------
 	// CONSTRUCTOR
@@ -56,6 +53,8 @@ class preDispatcher{
 	public function __construct() {
 		// load config
 		$this->aCfgCache=@include('pre_dispatcher_config.php');
+		include('cache.class_config.php');
+		$this->_oCache=new AhCache('preDispatcher');
 
 		// echo '<pre>'.print_r($_SERVER,1).'</pre>';
 
@@ -83,12 +82,7 @@ class preDispatcher{
 
 			// set minimal vars
 			$this->_sRequest=$_SERVER['REQUEST_URI'];
-			$this->_sCachefile=$this->getCachefile();
-
-			$this->_sCacheRemovefile=$this->aCfgCache['cache']['dir'].'/__remove_me_to_make_all_caches_invalid__';
-			if(!file_exists($this->_sCacheRemovefile)){
-				touch($this->_sCacheRemovefile);
-			}
+			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
 
 			$this->sDeleteKey='__delete_'.md5($_SERVER['HTTP_HOST']);
 			$this->aCfgCache['refreshcache']['get'][]=$this->sDeleteKey;
@@ -105,9 +99,9 @@ class preDispatcher{
 	// --------------------------------------------------------------------------------
 
 	/**
+	 * !!! DEPRECATED !!!
      * recursive cleanup of a given directory; this function is used by
      * public function cleanup()
-     * @since 2.0
      * @param string $sDir full path of a local directory
      * @param string $iTS  timestamp
      * @return     true
@@ -168,6 +162,8 @@ class preDispatcher{
      * @return     true
      */
     public function cleanup($iSec = false) {
+		$aReturn=$this->_oCache->getCachedItems(false, $aFilter);
+
 		/*
         echo date("d.m.y - H:i:s") . " START CLEANUP ".$this->aCfgCache['cache']['dir'].", $iSec s<br>
                 <style>
@@ -175,7 +171,9 @@ class preDispatcher{
                     .delfile{color:#900;}
                     .keepfile{color:#ccc;}
 				</style>";
-		*/				
+		*/		
+		
+		// TODO: use method getListOfCachefiles() and then delete()
         $this->_cleanupDir($this->aCfgCache['cache']['dir'], date("U") - $iSec);
         // echo date("d.m.y - H:i:s") . " END CLEANUP <br>";
         return true;
@@ -249,7 +247,7 @@ class preDispatcher{
 				. '; color:#fee; padding: 0.5em; z-index: 100000;">'
 				. '<h3 style="margin:0; ">'.__CLASS__.':</h3>'
 				. $sReturn
-				. 'Total: <strong style="font-size: 130%;">'.(number_format($iLastTime-$iStartTime, 5)).'s</strong>'
+				. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong>'
 				. '</div>'
 			;
 		}
@@ -312,43 +310,13 @@ class preDispatcher{
 		return $bReturn;
 
 	}
-	/**
-     * generate a filename with full path for a cache file
-	 * 
- 	 * @return string
-	 */
-	public function getCachefile(){
-		$sReturn='';
-
-		// remove ending "?" in the request
-		$this->_sRequest=preg_replace('/\?$/', '', $this->_sRequest);
-		// $this->addInfo('using req ' . $this->_sRequest);
-		if(isset($this->aCfgCache['cache']['readable']) && $this->aCfgCache['cache']['readable']){
-			$sCacheFile=str_replace(
-				array('\\', '?', '&', '=', '//'),
-				array('/',  '/', '&', '/', '/'),
-				$this->_sRequest
-			);
-		} else {
-			$sCacheFile=preg_replace('/([0-9a-f]{6})/', "$1/", md5($this->_sRequest));
-		}
-
-		$sCacheFile.='.'.$this->_sCacheExt;
-		$sCacheFile=str_replace(
-			'/.'.$this->_sCacheExt,
-			'.'.$this->_sCacheExt, 
-			$sCacheFile
-		);
-		$this->addInfo('cachefile = '.$sCacheFile);
-		return $this->aCfgCache['cache']['dir'].'/'.$this->_sCacheSubdir.'/'.$sCacheFile;
-	}
 
 	/**
-	 * get ttl in sec
+	 * get ttl for a request in sec by reading regex inmm the config
 	 *
 	 * @return integer
 	 */
-	public function getCacheTtl(){
+	public function getConfiguredTtl(){
 		$iTtl=$this->aCfgCache['ttl']['_default'];
 		// $this->addInfo('ttl default = '.$iTtl.'s');
 		foreach($this->aCfgCache['ttl'] as $sRegex => $iValue){
@@ -359,6 +327,9 @@ class preDispatcher{
 			}
 		}
 		$this->addInfo('Cache-ttl = '.$iTtl.'s');
+		if(!$iTtl){
+			$this->deleteCache();
+		}
 		return $iTtl;
 	}
 
@@ -368,11 +339,8 @@ class preDispatcher{
 	 * @return void
 	 */
 	public function getFileAge(){
-		
-		if(is_file($this->_sCachefile)){
-			return date('U')-filemtime($this->_sCachefile);
-		}
-		return false;
+		return $this->_oCache->getAge();
+
 	}
 
 	/**
@@ -387,28 +355,56 @@ class preDispatcher{
 			$this->addInfo('Using Cache = NO (refreshing it)');
 			return false;
 		}
+		
+		if(!$this->_oCache->isExpired()){
+			$iTtl=$this->_oCache->getTtl();
+			$iAgeOfCache=$this->_oCache->getAge();
+			$iLiftime=round($iAgeOfCache/$iTtl*100);
+			$this->addInfo('cache age '.$iAgeOfCache.'s');
+			$this->addInfo('ttl '.$iTtl.'s');
+			$this->addInfo('lifetime '.$iLiftime.'%');
 
-		if(
-			file_exists($this->_sCachefile) 
-			&& is_file($this->_sCachefile)
-		){
-			if(!$this->isExpired()){
-				$this->addInfo('Using Cache :-)');
-				echo str_replace(
-					'</body',
-					$this->renderHeaders('fromcache').'</body',
-					file_get_contents($this->_sCachefile)
-				);
-				die();
-			}
-			$this->addInfo('Using Cache = NO');
-		} else {
-			$this->addInfo('Cache-exists = NO');
+			$this->addInfo('Using Cache :-)');
+			$aData=$this->_oCache->read();
+			echo str_replace(
+				'</body',
+				$this->renderHeaders('fromcache').'</body',
+				$aData['content']
+			);
+			die();
 		}
+		$this->addInfo('Using Cache = NO');
 		return false;
+
 	}
 
+	/**
+	 * get an array with a list of cached elements without data
+	 * key is the filename
+	 * items in the array
+	 *            [iTtl] => ttl of the cache item [s]
+     *            [tsExpire] => expire date
+     *            [module] => preDispatcher
+     *            [cacheid] => id of the cached item
+     *            [_lifetime] => lifetime left [s]
+     *            [_age] => age since last update [s]
+	 *
+	 * @param array $aFilter  filter; valid keys are
+	 *                        - ageOlder       integer  return items that are older [n] sec
+	 *                        - lifetimeBelow  integer  return items that expire in less [n] sec
+	 *                        no filter returns all cached entries
+	 * @return array
+	 */
+	public function getListOfCachefiles($aFilter){
+		$aReturn=$this->_oCache->getCachedItems(false, $aFilter);
+		return $aReturn;
+	}
 
+	public function getRefreshUrl(){
+		$sUrl='http'.(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 's' : '') .'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
+		$sUrl.=(strstr($sUrl, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
+		return $sUrl;
+	}
 	/**
 	 * return boolean if the current request can be cached
 	 * remark: additionally the existance of a cache, its age and ttl
@@ -431,43 +427,12 @@ class preDispatcher{
 			$bReturn=false;
 		}
 		if(!$this->_checkCfgKey('nocache',$sContent)){
+			$this->deleteCache();
 			$bReturn=false;
 		}
 		return $bReturn;
 	}
 
-	/**
-	 * check if the cache of the current request is expired
-	 *
-	 * @param [type] $sRequest
-	 * @param [type] $iAge
-	 * @return boolean
-	 */
-	public function isExpired(){
-		if(filemtime($this->_sCacheRemovefile) > filemtime($this->_sCachefile)){
-			$this->addInfo('Override: newer remove file');
-			return true;
-		}
-		$iAgeOfCache=$this->getFileAge();
-		$this->addInfo('Cache-exists = true');
-		$this->addInfo('Cache-age = '.$iAgeOfCache.'s');
-		$iTtl=$this->getCacheTtl($this->_sRequest);
-		$bExpired=$iAgeOfCache>$iTtl;
-		if(!$iTtl){
-			$this->deleteCache();
-		} else{
-			if(!$bExpired){
-				$iLiftime=round($iAgeOfCache/$iTtl*100);
-				$this->addInfo('lifetime '.$iLiftime.'%');
-				if($iLiftime>$this->_iQueueLevel){
-					$this->doQueue();
-				}
-			}
-		}
-
-		$this->addInfo('expired: '.($bExpired ? 'YES':'no ('.($iTtl-$iAgeOfCache).'s left)'));
-		return $iAgeOfCache>$iTtl;
-	}
 
 	/**
 	 * check if the current request is a refresh of a cache
@@ -481,6 +446,7 @@ class preDispatcher{
 				if(isset($_GET[$sEntry])){
 					$this->addInfo('check refresh - found GET var ['.$sEntry.'] = ' . $_GET[$sEntry]);
 					$this->_sRequest=str_replace($sEntry.'='.$_GET[$sEntry], '', $this->_sRequest);
+
 					unset($_GET[$sEntry]);
 					$bRefresh=true;
 				}
@@ -492,7 +458,11 @@ class preDispatcher{
 				array('?',  '&'), 
 				$this->_sRequest
 			);
-			$this->_sCachefile=$this->getCachefile();
+			# cut trailing "?"
+			$this->_sRequest=preg_replace('#\?$#','',$this->_sRequest);
+			
+			$this->addInfo('Request ' . $this->_sRequest);
+			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
 		}
 		return $bRefresh;
 	}
@@ -502,14 +472,9 @@ class preDispatcher{
 	 * @return boolean
 	 */
 	public function deleteCache(){
-		
-		if(file_exists($this->_sCachefile)){
-			$this->addInfo('deleting cache item');
-			return unlink($this->_sCachefile);
-		} else {
-			$this->addInfo('skip deleting cache item - does not exist');
-		}
-		return false;
+		$bDeleted=$this->_oCache->delete();
+		$this->addInfo($bDeleted ? 'cache was deleted' : 'Cache not deleted (mabe it did not exist)');
+		return $bDeleted;
 	}
 
 	/**
@@ -518,78 +483,36 @@ class preDispatcher{
 	 * @param string $sContent  content of fetched request
 	 * @return boolean
 	 */
-	public function doCache($sContent){
+	public function doCache($aData){
 
 		// ensure if cachable *with* content check
-		if(!$this->isCachable($sContent) || !$this->getCacheTtl()){
+		$iTtl=$this->getConfiguredTtl();
+		$sContent=$aData['content'];
+		if(!$sContent || strlen($sContent)<200 || !$this->isCachable($sContent) || !$iTtl){
 			$this->addInfo('Request is not cachable');
 			return false;
 		}
-
-		$sCacheDir=dirname($this->_sCachefile);
-		if(!is_dir($sCacheDir)){
-			if(!@mkdir($sCacheDir, 0755, true)){
-				$this->addInfo('ERROR: unable to create cache dir');
-				$bReturn=false;
-			}
-		}
-		$this->addInfo('store as cache item');
-		return file_put_contents($this->_sCachefile, $sContent);
-	}
-
-	// --------------------------------------------------------------------------------
-	//
-	// queue
-	//
-	// --------------------------------------------------------------------------------
-	/**
-	 * queue the current request; called in isExpired
-	 * @see isExpired
-	 *
-	 * @return boolean
-	 */
-	public function doQueue(){
-		$this->addInfo('need to renew soon.');
-		$sRenewDir=$this->aCfgCache['cache']['dir'].'/'.$this->_sQueueSubdir.'/';
-		$sFile=$sRenewDir.'/'.md5($this->_sRequest);
-
-		if(file_exists($sFile)){
-			$this->addInfo('was queued already.');
-			return true;
-		}
-
-		if(!is_dir($sRenewDir)){
-			if(!@mkdir($sRenewDir, 0755, true)){
-				$this->addInfo('ERROR: unable to create renew dir');
-				$bReturn=false;
-			}
-		}
-		$sUrl='http'.(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 's' : '') .'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
-		$sUrl.=(strstr($sUrl, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
-		return file_put_contents($sFile, $sUrl);
+		$this->addInfo('store '.strlen($sContent).' byte as cache item');
+		return $this->_oCache->write($aData, $iTtl);
 	}
 	/**
-	 * queue the current request; called in isExpired
-	 * @see isExpired
+	 * refresh cache with current content
 	 *
+	 * @param string $sContent  content of fetched request
 	 * @return boolean
 	 */
-	public function readQueue(){
-		$aItems=array();
-		$sDir=$this->aCfgCache['cache']['dir'].'/'.$this->_sQueueSubdir.'/';
+	public function refreshCache($sCacheId){
 
-        if (!($d = dir($sDir))) {
+		// ensure if cachable *with* content check
+		$iTtl=$this->getConfiguredTtl();
+		$sContent=$aData['content'];
+		if($sContent && strlen($sContent)<200 && (!$this->isCachable($sContent) || !$iTtl)){
+			$this->addInfo('Request is not cachable');
+			return false;
 		}
-		while ($entry = $d->read()) {
-            $sEntry = $sDir . "/" . $entry;
-            if (is_file($sEntry)) {
-				$aItems[]=array(
-					'file'=>$sEntry,
-					'url'=>file_get_contents($sEntry),
-				);
-			}
-		}
-		return $aItems;
+		$this->addInfo('store '.strlen($sContent).' byte as cache item');
+		return $this->_oCache->write($aData, $iTtl);
 	}
+
 }
 

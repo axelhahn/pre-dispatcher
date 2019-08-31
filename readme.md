@@ -49,20 +49,6 @@ Means: just plain PHP - no database, no special modules.
 
 ## Installation ##
 
-### General instruction ###
-
-* Extract the files in any wanted directory of your webroot
-* For Non Concrete5 projects: copy the [path/predispatcher]/index.php and adapt a few lines in the last section "run normal request" for your tool
-* in your main dispatcher add an include to the [path/predispatcher]/index.php
-* go to [path/predispatcher]
-* copy pre_dispatcher_config.dist.php to pre_dispatcher_config.php
-* make your changes in the created config
-  * In the beginning enable the debugging for your ip and enable html output
-  * go to the ttl section and set the caching time for your requests. You can set a default and then override it by adding a list of regex to requests and its wanted caching times
-  * if you have a CMS or other backend: you can define how to detect that a backend is open. Set a cookie variable name or session variable name in the __delcache__ section. This will delete a cache for an opened page if you are logged in.
-  * The __nocache__ section - a request won't be stored in the cache if one of its conditions was found
-* Cleanup the cache directory: enable a job that runs the cleanup.php (it deletes cache files > 14d) or 
-
 ### Instructions for Concrete5 ###
 
 It acts like a full page cache and is placed before any C5 bootstrap action. This is why it is fast.
@@ -82,7 +68,7 @@ require 'concrete/dispatcher.php';
 * go to [webroot]/application/pre_dispatcher/
 * copy pre_dispatcher_config.dist.php to pre_dispatcher_config.php
 * make your changes in the created config
-* Enable the cleanup
+* Enable the refresh cronjob
 
 ## Config entries ##
 
@@ -94,14 +80,6 @@ This is the dist file:
 ``` php
 <?php
 	return array(
-		'cache'=>array(
-
-			// cache directory
-			'dir'=>__DIR__.'/../../.ht_static_cache',
-
-			//  generate readable filenames for cachefiles
-			'readable'=>true,
-		),
 
 		'debug'=>array(
 
@@ -202,10 +180,8 @@ The behaviour of a cache you expect is:
 As long a coched page is not outdated then the cached content will be delivered.
 If the moment comes that the ttl is reached then the cached content is outdated. The next request is uncached and creates a newly generated cache.
 
-The preDispatcher checks on a request if the lifetime of a cached page is > 75%. If so it adds an update request to a queue.
-
 Everytime you start the refresh.php it ...
-* reads all entries of this queue
+* reads all entries in the cache detecting those having a lifetime less 4 h
 * makes an http request that replaces the existing cache with the content of the last request
 
 If you can imagine timing is everything.
@@ -232,3 +208,4 @@ Step b)
 If you changed the content then make a request to the page to update and add your GET parameter, i.e.
 
     https://www.example.com/my/updated/page?rebuildcache=1
+
