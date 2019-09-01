@@ -27,10 +27,10 @@
  *                  - limit number of files in cache directory<br>
  * 
  * PRE ... NON PUBLIC RELEASE
- * 2019-08-31  2.4  - added getCachedItems() to get a filtered list of cache files<br>
+ * 2019-09-01  2.4  - added getCachedItems() to get a filtered list of cache files<br>
  *                  - added remove file to make complete cache of a module invalid<br>
  * --------------------------------------------------------------------------------<br>
- * @version 2.4
+ * @version 2.4-beta
  * @author Axel Hahn
  * @link http://www.axel-hahn.de/php_contentcache
  * @license GPL
@@ -173,59 +173,6 @@ class AhCache {
         }
 
     }
-            
-    // ----------------------------------------------------------------------
-    /**
-     * recursive cleanup of a given directory; this function is used by
-     * public function cleanup()
-     * @since 2.0
-     * @param string $sDir full path of a local directory
-     * @param string $iTS  timestamp
-     * @return     true
-    private function _cleanupDir($sDir, $iTS) {
-        echo "<ul><li class=\"dir\">DIR: <strong>$sDir</strong><ul>";
-
-        if (!file_exists($sDir)) {
-            echo "\t Directory does not exist - [$sDir]</ul></li></ul>";
-            return;
-        }
-        if (!($d = dir($sDir))) {
-            echo "\t Cannot open directory - [$sDir]</ul></li></ul>";
-            return;
-        }
-        while ($entry = $d->read()) {
-            $sEntry = $sDir . "/" . $entry;
-            if (is_dir($sEntry) && $entry != '.' && $entry != '..') {
-                $this->_cleanupDir($sEntry, $iTS);
-            }
-            if (file_exists($sEntry)) {
-                $ext = pathinfo($sEntry, PATHINFO_EXTENSION);
-                $ext = substr($sEntry, strrpos($sEntry, '.') + 1);
-
-                $exts = explode(".", $sEntry);
-                $n = count($exts) - 1;
-                $ext = $exts[$n];
-
-                if ($ext == $this->_sCacheExt) {
-
-                    $aTmp = stat($sEntry);
-                    $iAge = date("U") - $aTmp['mtime'];
-                    if ($aTmp['mtime'] <= $iTS) {
-                        echo "<li class=\"delfile\">delete cachefile: $sEntry ($iAge s)<br>";
-                        unlink($sEntry);
-                    } else {
-                        echo "<li class=\"keepfile\">keep cachefile: $sEntry ($iAge s; " . ($aTmp['mtime'] - $iTS) . " s left)</li>";
-                    }
-                }
-            }
-        }
-        echo "</ul></li></ul>";
-
-        // try to delete if it should be empty
-        @rmdir($sDir);
-        return true;
-    }
-     */
 
     // ----------------------------------------------------------------------
     /**
@@ -281,6 +228,22 @@ class AhCache {
       public funtions
       ---------------------------------------------------------------------- */
 
+    /**
+     * helper function - remove empty cache directories up to module cache dir
+     *
+     * @param [type] $sDir
+     * @return void
+     */
+    private function _removeEmptyCacheDir($sDir){
+        // echo __METHOD__."($sDir)<br>\n";
+        if (dirname($sDir) > $this->_sCacheDir . "/" . $this->sModule){
+            if (@rmdir(dirname($sFile))){
+                $this->_removeEmptyCacheDir(dirname($sDir));
+            }
+        }
+        return true;
+    }
+
     // ----------------------------------------------------------------------
     /**
      * Cleanup cache directory; delete all cachefiles older than n seconds
@@ -298,15 +261,15 @@ class AhCache {
      * @return     true
      */
     public function cleanup($iSec = false) {
-        // quck and dirty
+        // quick and dirty
         $aData=$this->getCachedItems(false, array('ageOlder'=>$iSec));
         if($aData){
             $aFiles=array_keys($aData);
             rsort($aFiles);
+            print_r($aFiles);
             foreach(array_keys($aData) as $sFile){
                 unlink($sFile);
-                // try to delete if it should be empty
-                @rmdir(dirname($sFile));
+                $this->_removeEmptyCacheDir(dirname($sFile));
             }
         }
         return true;
@@ -357,35 +320,20 @@ class AhCache {
 
                     $bAdd=false;
 
-                    if(isset($aFilter['ageOlder']) 
-                        && ($aData['_age']>$aFilter['ageOlder'])
-                    ){
+                    if(isset($aFilter['ageOlder']) && ($aData['_age']>$aFilter['ageOlder'])){
                         $bAdd=true;
                     }
-                    if(isset($aFilter['lifetimeBelow']) 
-                        && ($aData['_lifetime']<$aFilter['lifetimeBelow'])
-                    ){
+                    if(isset($aFilter['lifetimeBelow']) && ($aData['_lifetime']<$aFilter['lifetimeBelow'])){
                         $bAdd=true;
                     }
 
-                    if(!count($aFilter)){
+                    if(!is_array($aFilter) || !count($aFilter)){
                         $bAdd=true;
                     }
 
                     if($bAdd){
                         $aReturn[$sEntry]=$aData;
                     }
-
-                    /*
-                    $aTmp = stat($sEntry);
-                    $iAge = date("U") - $aTmp['mtime'];
-                    if ($aTmp['mtime'] <= $iTS) {
-                        echo "<li class=\"delfile\">delete cachefile: $sEntry ($iAge s)<br>";
-                        unlink($sEntry);
-                    } else {
-                        echo "<li class=\"keepfile\">keep cachefile: $sEntry ($iAge s; " . ($aTmp['mtime'] - $iTS) . " s left)</li>";
-                    }
-                    */
                 }
             }
         }

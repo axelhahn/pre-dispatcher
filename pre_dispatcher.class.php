@@ -98,58 +98,6 @@ class preDispatcher{
 	//
 	// --------------------------------------------------------------------------------
 
-	/**
-	 * !!! DEPRECATED !!!
-     * recursive cleanup of a given directory; this function is used by
-     * public function cleanup()
-     * @param string $sDir full path of a local directory
-     * @param string $iTS  timestamp
-     * @return     true
-     */
-    private function _cleanupDir($sDir, $iTS) {
-        // echo "<ul><li class=\"dir\">DIR: <strong>$sDir</strong><ul>";
-
-        if (!file_exists($sDir)) {
-            // echo "\t Directory does not exist - [$sDir]</ul></li></ul>";
-            return false;
-        }
-        if (!($d = dir($sDir))) {
-            // echo "\t Cannot open directory - [$sDir]</ul></li></ul>";
-            return false;
-        }
-        while ($entry = $d->read()) {
-            $sEntry = $sDir . "/" . $entry;
-            if (is_dir($sEntry) && $entry != '.' && $entry != '..') {
-                $this->_cleanupDir($sEntry, $iTS);
-            }
-            if (file_exists($sEntry)) {
-                $ext = pathinfo($sEntry, PATHINFO_EXTENSION);
-                $ext = substr($sEntry, strrpos($sEntry, '.') + 1);
-
-                $exts = explode(".", $sEntry);
-                $n = count($exts) - 1;
-                $ext = $exts[$n];
-
-                if ($ext == $this->_sCacheExt) {
-
-                    $aTmp = stat($sEntry);
-                    $iAge = date("U") - $aTmp['mtime'];
-                    if ($aTmp['mtime'] <= $iTS) {
-						// echo "<li class=\"delfile\">delete cachefile: $sEntry ($iAge s)<br>";
-						$this->addInfo("delete cachefile: $sEntry ($iAge s)");
-                        unlink($sEntry);
-                    } else {
-                        // echo "<li class=\"keepfile\">keep cachefile: $sEntry ($iAge s; " . ($aTmp['mtime'] - $iTS) . " s left)</li>";
-                    }
-                }
-            }
-        }
-        // echo "</ul></li></ul>";
-
-        // try to delete if it should be empty
-        @rmdir($sDir);
-        return true;
-	}
     /**
      * Cleanup cache directory; delete all cachefiles older than n seconds
      * Other filetypes in the directory won't be touched.
@@ -162,21 +110,7 @@ class preDispatcher{
      * @return     true
      */
     public function cleanup($iSec = false) {
-		$aReturn=$this->_oCache->getCachedItems(false, $aFilter);
-
-		/*
-        echo date("d.m.y - H:i:s") . " START CLEANUP ".$this->aCfgCache['cache']['dir'].", $iSec s<br>
-                <style>
-                    .dir{color:#888;}
-                    .delfile{color:#900;}
-                    .keepfile{color:#ccc;}
-				</style>";
-		*/		
-		
-		// TODO: use method getListOfCachefiles() and then delete()
-        $this->_cleanupDir($this->aCfgCache['cache']['dir'], date("U") - $iSec);
-        // echo date("d.m.y - H:i:s") . " END CLEANUP <br>";
-        return true;
+		return $this->_oCache->cleanup($iSec);
     }
 	
 	// --------------------------------------------------------------------------------
@@ -247,7 +181,8 @@ class preDispatcher{
 				. '; color:#fee; padding: 0.5em; z-index: 100000;">'
 				. '<h3 style="margin:0; ">'.__CLASS__.':</h3>'
 				. $sReturn
-				. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong>'
+				. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong><br>'
+				. ($sMode==='fromcache' ? '<a href="'.$this->getRefreshUrl().'" target="_blank">Refresh</a>' : '')
 				. '</div>'
 			;
 		}
