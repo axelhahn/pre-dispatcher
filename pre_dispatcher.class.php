@@ -257,7 +257,7 @@ class preDispatcher{
 		foreach($this->aCfgCache['ttl'] as $sRegex => $iValue){
 			// $this->addInfo('... test '.$sRegex);
 			if (preg_match("#$sRegex#", $this->_sRequest)){
-				// $this->addInfo('...... matched --> set ttl to '.$iValue);
+				$this->addInfo('... matched ['.$sRegex.']--> set ttl to '.$iValue);
 				$iTtl=$iValue;
 			}
 		}
@@ -325,8 +325,11 @@ class preDispatcher{
      *            [_age] => age since last update [s]
 	 *
 	 * @param array $aFilter  filter; valid keys are
-	 *                        - ageOlder       integer  return items that are older [n] sec
-	 *                        - lifetimeBelow  integer  return items that expire in less [n] sec
+	 *                          - ageOlder         integer  return items that are older [n] sec
+	 *                          - lifetimeBelow    integer  return items that expire in less [n] sec (or outdated)
+	 *                          - lifetimeGreater  integer  return items that expire in more than [n] sec
+	 *                          - ttlBelow         integer  return items with ttl less than [n] sec
+	 *                          - ttlGreater       integer  return items with ttl more than [n] sec
 	 *                        no filter returns all cached entries
 	 * @return array
 	 */
@@ -395,6 +398,7 @@ class preDispatcher{
 			);
 			# cut trailing "?"
 			$this->_sRequest=preg_replace('#\?$#','',$this->_sRequest);
+			$this->_sRequest=preg_replace('#\&$#','',$this->_sRequest);
 			
 			$this->addInfo('Request ' . $this->_sRequest);
 			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
@@ -428,6 +432,7 @@ class preDispatcher{
 			return false;
 		}
 		$this->addInfo('store '.strlen($sContent).' byte as cache item');
+		$this->addInfo($this->_sRequest);
 		return $this->_oCache->write($aData, $iTtl);
 	}
 	/**

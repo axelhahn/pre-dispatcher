@@ -17,7 +17,7 @@
 
 require_once('pre_dispatcher.class.php');
 require_once('cache.class.php');
-$iLifetimeBelow=60*60*4;
+$iLifetimeBelow=60*60*3; // 3 h
 
 // ----------------------------------------------------------------------
 // FUNCTIONS
@@ -54,22 +54,27 @@ $iLifetimeBelow=60*60*4;
 
     $oAhd=new preDispatcher(); 
     
+    echo date("H:i:s") . " | starting scan ... \n";
     $aItems=$oAhd->getListOfCachefiles(array(
         'lifetimeBelow'=>$iLifetimeBelow,
     ));
-    echo "Found urls to refresh (lifetime < $iLifetimeBelow sec): ".count($aItems)."\n\n";
+    echo (number_format(microtime(true)-$iScriptStart, 3))."s | Found cache items (lifetime < $iLifetimeBelow sec): ".count($aItems)."\n";
 
     if (count($aItems)){
         $iCounter=0;
+        $aUrls=array();
         foreach($aItems as $aItem){
             $iCounter++;
 
             $oCacheItem=new AhCache($aItem['module'], $aItem['cacheid']); 
             $aData=$oCacheItem->read();
-            
-            echo date("H:i:s") .' | '. $iCounter . " | " . $aItem['_lifetime'].'s left | '. $aData['url']."... ";
+            $aUrls[$aData['url']][]=$aItem['_lifetime'];
+        }
+        echo "Found urls to refresh: ".count($aUrls)."\n\n";
+        foreach($aUrls as $sUrl=>$aTtl){
+            echo date("H:i:s") .' | '. $iCounter . " | " . $aTtl[0].'s left | '. $sUrl."... ";
             $iStart=microtime(true);
-            $res=httpGet($aData['url']);
+            $res=httpGet($sUrl);
             echo " (".(number_format(microtime(true)-$iStart, 3))."s)\n";
         }
     }

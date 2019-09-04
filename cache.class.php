@@ -181,8 +181,9 @@ class AhCache {
      * @return     array  array with data, file stat
      */
     private function _getAllCacheData() {
-        if (!$this->_sCacheFile)
+        if (!$this->_sCacheFile){
             return false;
+        }
         $this->_aCacheInfos = array();
         $aTmp = $this->_readCacheItem($this->_sCacheFile);
         if ($aTmp) {
@@ -280,8 +281,11 @@ class AhCache {
      *
      * @param string  $sDir     full path of cache dir; default: false (auto detect cache dir)
 	 * @param array   $aFilter  filter; valid keys are
-	 *                          - ageOlder       integer  return items that are older [n] sec
-	 *                          - lifetimeBelow  integer  return items that expire in less [n] sec
+	 *                          - ageOlder         integer  return items that are older [n] sec
+	 *                          - lifetimeBelow    integer  return items that expire in less [n] sec (or outdated)
+	 *                          - lifetimeGreater  integer  return items that expire in more than [n] sec
+	 *                          - ttlBelow         integer  return items with ttl less than [n] sec
+	 *                          - ttlGreater       integer  return items with ttl more than [n] sec
 	 *                          no filter returns all cached entries
      * @return void
      */
@@ -326,10 +330,19 @@ class AhCache {
                     if(isset($aFilter['lifetimeBelow']) && ($aData['_lifetime']<$aFilter['lifetimeBelow'])){
                         $bAdd=true;
                     }
+                    if(isset($aFilter['lifetimeGreater']) && ($aData['_lifetime']<$aFilter['lifetimeGreater'])){
+                        $bAdd=true;
+                    }
+                    if(isset($aFilter['ttlBelow']) && ($aData['iTtl']<$aFilter['ttlBelow'])){
+                        $bAdd=true;
+                    }
+                    if(isset($aFilter['ttlGreater']) && ($aData['iTtl']>$aFilter['ttlGreater'])){
+                        $bAdd=true;
+                    }
 
                     if(!is_array($aFilter) || !count($aFilter)){
                         $bAdd=true;
-                    }
+                    } 
 
                     if($bAdd){
                         $aReturn[$sEntry]=$aData;

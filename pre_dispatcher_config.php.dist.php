@@ -23,8 +23,15 @@
 			'_default'=>60*60*24*14,
 
 			// regex of request uri to override a default
-			'^/my/more/dynamic/page$'=>60*60,
-			'^/some/nother/pages/.*'=>60*15,
+			'^/some/other/pages/.*'=>60*60,
+			'^/my/more/dynamic/page$'=>60*15,
+
+			// disallow all GET parameters
+			'\?'=>0,
+
+			// but allow params "item" and "id"
+			'\?.*(item|id)\=[a-zA-Z0-9\_\-\%]*$'=>60*60*24*14,
+
 		),
 
 		// ------------------------------------------------------------
