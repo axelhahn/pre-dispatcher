@@ -19,5 +19,5 @@
     $oAhd=new preDispatcher();
     
     // delete all cache files older 14d
-	$oAhd->cleanup(60*60*24*14);
+	$oAhd->cleanup(60*60*24*14, true);
     $oAhd->renderHeaders();

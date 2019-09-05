@@ -232,14 +232,16 @@ class AhCache {
     /**
      * helper function - remove empty cache directories up to module cache dir
      *
-     * @param [type] $sDir
+     * @param string    $sDir
+     * @param boolean   $bShowOutput   flag: show output? default: false (=no output)
      * @return void
      */
-    private function _removeEmptyCacheDir($sDir){
+    private function _removeEmptyCacheDir($sDir, $bShowOutput=false){
         // echo __METHOD__."($sDir)<br>\n";
         if (dirname($sDir) > $this->_sCacheDir . "/" . $this->sModule){
             if (@rmdir(dirname($sFile))){
-                $this->_removeEmptyCacheDir(dirname($sDir));
+                echo $bShowOutput ? 'REMOVED DIR  '.dirname($sFile) ."\n" : '';
+                $this->_removeEmptyCacheDir(dirname($sDir), $bShowOutput);
             }
         }
         return true;
@@ -258,19 +260,21 @@ class AhCache {
      * $o=new Cache(); $o->cleanup(0); 
      * 
      * @since 2.0
-     * @param int $iSec max age of cachefile; older cachefiles will be deleted
+     * @param int       $iSec          max age of cachefile; older cachefiles will be deleted
+     * @param boolean   $bShowOutput   flag: show output? default: false (=no output)
      * @return     true
      */
-    public function cleanup($iSec = false) {
+    public function cleanup($iSec = false, $bShowOutput=false) {
         // quick and dirty
         $aData=$this->getCachedItems(false, array('ageOlder'=>$iSec));
+        echo $bShowOutput ? 'CLEANUP  '.count($aData) ." files\n" : '';
         if($aData){
             $aFiles=array_keys($aData);
             rsort($aFiles);
-            print_r($aFiles);
             foreach(array_keys($aData) as $sFile){
+                echo $bShowOutput ? 'DELETE '.$sFile ."\n" : '';
                 unlink($sFile);
-                $this->_removeEmptyCacheDir(dirname($sFile));
+                $this->_removeEmptyCacheDir(dirname($sFile), $bShowOutput);
             }
         }
         return true;

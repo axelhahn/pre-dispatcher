@@ -106,11 +106,12 @@ class preDispatcher{
      * To delete all cachefles of all modules you can use
      * $o->cleanup(0); 
      * 
-     * @param int $iSec max age of cachefile; older cachefiles will be deleted
+     * @param int       $iSec          max age of cachefile; older cachefiles will be deleted
+     * @param boolean   $bShowOutput   flag: show output? default: false (=no output)
      * @return     true
      */
-    public function cleanup($iSec = false) {
-		return $this->_oCache->cleanup($iSec);
+    public function cleanup($iSec = false, $bShowOutput=false) {
+		return $this->_oCache->cleanup($iSec, $bShowOutput);
     }
 	
 	// --------------------------------------------------------------------------------

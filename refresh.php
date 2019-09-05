@@ -64,7 +64,6 @@ $iLifetimeBelow=60*60*3; // 3 h
         $iCounter=0;
         $aUrls=array();
         foreach($aItems as $aItem){
-            $iCounter++;
 
             $oCacheItem=new AhCache($aItem['module'], $aItem['cacheid']); 
             $aData=$oCacheItem->read();
@@ -72,6 +71,7 @@ $iLifetimeBelow=60*60*3; // 3 h
         }
         echo "Found urls to refresh: ".count($aUrls)."\n\n";
         foreach($aUrls as $sUrl=>$aTtl){
+            $iCounter++;
             echo date("H:i:s") .' | '. $iCounter . " | " . $aTtl[0].'s left | '. $sUrl."... ";
             $iStart=microtime(true);
             $res=httpGet($sUrl);
