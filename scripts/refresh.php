@@ -15,8 +15,8 @@
  * 
  */
 
-require_once('pre_dispatcher.class.php');
-require_once('cache.class.php');
+require_once(__DIR__.'/../classes/pre_dispatcher.class.php');
+require_once(__DIR__.'/../classes/cache.class.php');
 $iLifetimeBelow=60*60*3; // 3 h
 
 // ----------------------------------------------------------------------

@@ -32,12 +32,6 @@ class preDispatcher{
 	 */
 	protected $aMsg=array(); 
 
-    /**
-     * fileextension for storing cachefiles (without ".")
-     * @var string
-     */
-    protected $_sCacheExt = 'cache';
-
 	protected $_sRequest=false; 
 	protected $_bDebug=false;
 

@@ -15,7 +15,8 @@
  * 
  */
 
-    require_once('pre_dispatcher.class.php');
+    require_once(__DIR__.'/../classes/pre_dispatcher.class.php');
+
     $oAhd=new preDispatcher();
     
     // delete all cache files older 14d

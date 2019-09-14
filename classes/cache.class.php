@@ -72,7 +72,7 @@ class AhCache {
      * divider to limit count of cachefiles
      * @var type 
      */
-    private $_sCacheDirDevider = false;
+    private $_sCacheDirDivider = false;
     
     /**
      * fileextension for storing cachefiles (without ".")
@@ -215,8 +215,8 @@ class AhCache {
      */
     private function _getCacheFilename() {
         $sMyFile=md5($this->sCacheID);
-        if($this->_sCacheDirDevider && $this->_sCacheDirDevider>0){
-            $sMyFile=preg_replace('/([0-9a-f]{'.$this->_sCacheDirDevider.'})/', "$1/", $sMyFile);
+        if($this->_sCacheDirDivider && $this->_sCacheDirDivider>0){
+            $sMyFile=preg_replace('/([0-9a-f]{'.$this->_sCacheDirDivider.'})/', "$1/", $sMyFile);
         }
         $sMyFile.=".".$this->_sCacheExt;
         $sMyFile=str_replace("/.", ".", $sMyFile);

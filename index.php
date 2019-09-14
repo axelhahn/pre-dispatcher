@@ -19,7 +19,7 @@
 	ini_set('display_startup_errors', 1);
 	error_reporting(E_ALL);
 
-	require_once('pre_dispatcher.class.php');
+	require_once('classes/pre_dispatcher.class.php');
 
 	global $oAhd;
 	$oAhd=new preDispatcher();
@@ -53,7 +53,6 @@
 // MAIN
 //
 // ======================================================================
-
 
 // ----------------------------------------------------------------------
 // test request
