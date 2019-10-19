@@ -32,10 +32,14 @@ class preDispatcher{
 	 */
 	protected $aMsg=array(); 
 
+	protected $_sSelfUrl=false; 
 	protected $_sRequest=false; 
+	protected $_sBaseUrl=false;
 	protected $_bDebug=false;
 
 	protected $_oCache=false; 
+	protected $sRefreshKey=false;
+	protected $sDeleteKey=false;
 
 	// --------------------------------------------------------------------------------
 	// CONSTRUCTOR
@@ -75,11 +79,36 @@ class preDispatcher{
 			}
 
 			// set minimal vars
-			$this->_sRequest=$_SERVER['REQUEST_URI'];
-			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
-
+			$this->sRefreshKey='__refresh_'.md5($_SERVER['HTTP_HOST']);
 			$this->sDeleteKey='__delete_'.md5($_SERVER['HTTP_HOST']);
-			$this->aCfgCache['refreshcache']['get'][]=$this->sDeleteKey;
+			$this->aCfgCache['delcache']['get'][]=$this->sDeleteKey;
+			$this->aCfgCache['refreshcache']['get'][]=$this->sRefreshKey;
+			
+			$this->_sSelfUrl=$_SERVER['REQUEST_URI'];
+
+			$this->_sRequest=$_SERVER['REQUEST_URI'];
+			foreach(array('nocache', 'refreshcache', 'delcache') as $sCfgKey){
+
+				if(isset($this->aCfgCache[$sCfgKey]['get'])){
+					foreach($this->aCfgCache[$sCfgKey]['get'] as $sEntry){
+						if(isset($_GET[$sEntry])){
+							$this->_sRequest=str_replace($sEntry.'='.$_GET[$sEntry], '', $this->_sRequest);
+						}
+					}
+				}
+			}
+			$this->_sRequest=str_replace(
+				array('?&', '&&'), 
+				array('?',  '&'), 
+				$this->_sRequest
+			);
+			# cut trailing "?"
+			$this->_sRequest=preg_replace('#\?$#','',$this->_sRequest);
+			$this->_sRequest=preg_replace('#\&$#','',$this->_sRequest);
+			$this->_sBaseUrl='http'.(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 's' : '') .'://'.$_SERVER['HTTP_HOST'];
+			$this->addInfo($this->_sRequest);
+
+			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
 		}
 
 		return true;
@@ -169,15 +198,16 @@ class preDispatcher{
 				;
 			}
 		}
-		$sBg='rgba(128,128,128,0.7)';
 		if($sReturn){
 			$sReturn='<div style="position: absolute; top: 1em; right: 1em; border: 2px solid rgba(0,0,0,0.2); background:'
 				. $aColors[$sMode]
-				. '; color:#fee; padding: 0.5em; z-index: 100000;">'
-				. '<h3 style="margin:0; ">'.__CLASS__.':</h3>'
-				. $sReturn
-				. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong><br>'
-				. ($sMode==='fromcache' ? '<a href="'.$this->getRefreshUrl().'" target="_blank">Refresh</a>' : '')
+				. '; color:#fee; padding: 0.5em; max-width: 30em; z-index: 100000;">'
+					. '<h3 style="margin:0; ">'.__CLASS__.':</h3>'
+					. '<button onclick="location.href=\''.$this->_sBaseUrl.$this->_sRequest.'\';" style="color:#008;">Page</button> ' 					
+					. '<button onclick="location.href=\''.$this->getRefreshUrl().'\';" style="color:#080;">Refresh</button> ' 
+					. '<button onclick="location.href=\''.$this->getNocacheUrl().'\';" style="color:#f00;">Delete</button><br>'
+					. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong><br>'
+					. $sReturn
 				. '</div>'
 			;
 		}
@@ -281,6 +311,11 @@ class preDispatcher{
 	 */
 	public function getCachedContent(){
 
+		if(!$this->isCachable()){
+			$this->addInfo('Using Cache = NO (not cachable)');
+			return false;
+		}
+
 		if($this->isRefresh()){
 			$this->addInfo('Using Cache = NO (refreshing it)');
 			return false;
@@ -294,7 +329,7 @@ class preDispatcher{
 			$this->addInfo('ttl '.$iTtl.'s');
 			$this->addInfo('lifetime '.$iLiftime.'%');
 
-			$this->addInfo('Using Cache :-)');
+			$this->addInfo('Using Cache = YES :-)');
 			$aData=$this->_oCache->read();
 			echo str_replace(
 				'</body',
@@ -333,10 +368,27 @@ class preDispatcher{
 		return $aReturn;
 	}
 
+	/**
+	 * get full url to delete the current page
+	 *
+	 * @return void
+	 */
+	public function getNocacheUrl(){
+		if (!$this->sDeleteKey){
+			return false;
+		}
+		return $this->_sBaseUrl.$this->_sRequest.(strstr($this->_sRequest, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
+	}
+	/**
+	 * get full url to refresh the current page
+	 *
+	 * @return void
+	 */
 	public function getRefreshUrl(){
-		$sUrl='http'.(isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] ? 's' : '') .'://'.$_SERVER['HTTP_HOST'].$this->_sRequest;
-		$sUrl.=(strstr($sUrl, '?') ? '&' : '?' ) . $this->sDeleteKey.'=1';
-		return $sUrl;
+		if (!$this->sRefreshKey){
+			return false;
+		}
+		return $this->_sBaseUrl.$this->_sRequest.(strstr($this->_sRequest, '?') ? '&' : '?' ) . $this->sRefreshKey.'=1';
 	}
 	/**
 	 * return boolean if the current request can be cached
@@ -374,17 +426,17 @@ class preDispatcher{
 	 */
 	public function isRefresh(){
 		$bRefresh=false;
+
 		if(isset($this->aCfgCache['refreshcache']['get'])){
 			foreach($this->aCfgCache['refreshcache']['get'] as $sEntry){
 				if(isset($_GET[$sEntry])){
-					$this->addInfo('check refresh - found GET var ['.$sEntry.'] = ' . $_GET[$sEntry]);
+					$this->addInfo('is Refresh? Found GET var ['.$sEntry.'] = ' . $_GET[$sEntry]);
 					$this->_sRequest=str_replace($sEntry.'='.$_GET[$sEntry], '', $this->_sRequest);
-
-					unset($_GET[$sEntry]);
 					$bRefresh=true;
 				}
 			}
 		}
+		/*
 		if($bRefresh){
 			$this->_sRequest=str_replace(
 				array('?&', '&&'), 
@@ -398,6 +450,7 @@ class preDispatcher{
 			$this->addInfo('Request ' . $this->_sRequest);
 			$this->_oCache=new AhCache('preDispatcher', $this->_sRequest);
 		}
+		*/
 		return $bRefresh;
 	}
 	/**
@@ -423,11 +476,10 @@ class preDispatcher{
 		$iTtl=$this->getConfiguredTtl();
 		$sContent=$aData['content'];
 		if(!$sContent || strlen($sContent)<200 || !$this->isCachable($sContent) || !$iTtl){
-			$this->addInfo('Request is not cachable');
+			$this->addInfo('do cache: Request is not cachable');
 			return false;
 		}
-		$this->addInfo('store '.strlen($sContent).' byte as cache item');
-		$this->addInfo($this->_sRequest);
+		$this->addInfo('do cache: store '.strlen($sContent).' byte as cache item');
 		return $this->_oCache->write($aData, $iTtl);
 	}
 	/**
@@ -447,6 +499,51 @@ class preDispatcher{
 		}
 		$this->addInfo('store '.strlen($sContent).' byte as cache item');
 		return $this->_oCache->write($aData, $iTtl);
+	}
+	/**
+	 * remove internal params for deletion and refresh
+	 *
+	 * @return void
+	 */
+	public function removeDispatcherParams(){
+		foreach(array($this->sDeleteKey, $this->sRefreshKey) as $sKey){
+			if (isset($_REQUEST[$sKey])){
+				$this->addInfo('--> removing REQUEST var ' . $sKey);
+				unset($_REQUEST[$sKey]);
+			}
+			if (isset($_GET[$sKey])){
+				$this->addInfo('--> removing GET var ' . $sKey);
+				unset($_GET[$sKey]);
+				foreach($_SERVER as $sSrvKey=>$value){
+					if(is_string($value) && strstr($value, $sKey)){						
+						$_SERVER[$sSrvKey]=preg_replace('/[?&]*'.$sKey.'=1/', '', $value );
+						$this->addInfo('--> update SERVER ' . $sSrvKey .' = '. $_SERVER[$sSrvKey]);
+					}
+				}
+				/*
+				if (isset($_SESSION) && count($_SESSION)){
+					foreach($_SESSION as $sSrvKey=>$value){
+						if(strstr($value, $sKey)){
+							
+							$_SESSION[$sSrvKey]=preg_replace('/[?&]*'.$sKey.'=1/', '', $value );
+							$this->addInfo('--> update SESSION ' . $sSrvKey .' = '. $_SESSION[$sSrvKey]);
+						}
+					}
+				}
+				if (isset($_COOKIE) && count($_COOKIE)){
+					foreach($_COOKIE as $sSrvKey=>$value){
+						if(strstr($value, $sKey)){
+							
+							$_COOKIE[$sSrvKey]=preg_replace('/[?&]*'.$sKey.'=1/', '', $value );
+							$this->addInfo('--> update COOKIE ' . $sSrvKey .' = '. $_COOKIE[$sSrvKey]);
+						}
+					}
+				}
+				*/
+			}
+		}
+		
+		return true;
 	}
 
 }

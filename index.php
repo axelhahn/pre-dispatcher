@@ -21,8 +21,6 @@
 
 	require_once('classes/pre_dispatcher.class.php');
 
-	global $oAhd;
-	$oAhd=new preDispatcher();
 
 // ======================================================================
 //
@@ -54,28 +52,15 @@
 //
 // ======================================================================
 
-// ----------------------------------------------------------------------
-// test request
-// ----------------------------------------------------------------------
-
-	$oAhd->addInfo(''.$_SERVER['REQUEST_METHOD'].' '.$_SERVER['REQUEST_URI']);
-
-	if(!$oAhd->isCachable()){
-		$oAhd->addInfo('not cachable');
-		$oAhd->renderHeaders('uncachable');
-		return false;
-	}
-
-// ----------------------------------------------------------------------
-// test if a cached content can be delivered
-// ----------------------------------------------------------------------
-
+	global $oAhd;
+	$oAhd=new preDispatcher();
 	$oAhd->getCachedContent();
-
+	
 // ----------------------------------------------------------------------
 // no cache? --> run normal request
 // ----------------------------------------------------------------------
 
+	$oAhd->removeDispatcherParams();
 	$oAhd->addInfo('--> making a request');
 	ob_start("handleOutput", 0, false);
 	require __DIR__.'/../../concrete/dispatcher.php';
