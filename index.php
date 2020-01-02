@@ -33,9 +33,7 @@
 		global $oAhd;
 		
 		$aCustomHeaders=array(
-			'cache'=>'public, must-revalidate',
-			'cache-control'=>'max-age=120',
-			'ETag'=>'pd-'.md5($buffer),
+			// 'variable'=>'value',
 		);
 		$oAhd->doCache(array(
 			'url'=>$oAhd->getRefreshUrl(),

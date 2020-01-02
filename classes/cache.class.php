@@ -1,6 +1,15 @@
 <?php
 /** 
+ * --------------------------------------------------------------------------------<br>
+ *          __    ______           __       
+ *   ____ _/ /_  / ____/___ ______/ /_  ___ 
+ *  / __ `/ __ \/ /   / __ `/ ___/ __ \/ _ \
+ * / /_/ / / / / /___/ /_/ / /__/ / / /  __/
+ * \__,_/_/ /_/\____/\__,_/\___/_/ /_/\___/ 
+ *                                        
+ * --------------------------------------------------------------------------------<br>
  * AXELS CACHE CLASS<br>
+ * --------------------------------------------------------------------------------<br>
  * <br>
  * THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE <br>
  * LAW. EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR <br>
@@ -25,14 +34,15 @@
  *                  - _cleanup checks with file_exists<br>
  * 2014-03-31  2.3  - added _setup() that to includes custom settings<br>
  *                  - limit number of files in cache directory<br>
- * 
- * PRE ... NON PUBLIC RELEASE
- * 2019-09-01  2.4  - added getCachedItems() to get a filtered list of cache files<br>
+ * 2019-11-24  2.4  - added getCachedItems() to get a filtered list of cache files<br>
  *                  - added remove file to make complete cache of a module invalid<br>
+ *                  - rename var in cache.class_config.php to "$this->_sCacheDirDivider"<br>
+ * 2019-11-26  2.5  - added getModules() to get a list of existing modules that stored<br>
+ *                    a cached item<br>
  * --------------------------------------------------------------------------------<br>
- * @version 2.4-beta
+ * @version 2.5
  * @author Axel Hahn
- * @link http://www.axel-hahn.de/php_contentcache
+ * @link https://www.axel-hahn.de/docs/ahcache/index.htm
  * @license GPL
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL 3.0
  * @package Axels Cache
@@ -186,11 +196,16 @@ class AhCache {
         }
         $this->_aCacheInfos = array();
         $aTmp = $this->_readCacheItem($this->_sCacheFile);
+
         if ($aTmp) {
             $this->_aCacheInfos['data'] = $aTmp['data'];
             $this->_iTtl = $aTmp['iTtl'];
             $this->_tsExpire = $aTmp['tsExpire'];
             $this->_aCacheInfos['stat'] = stat($this->_sCacheFile);
+
+            // @see loadCachefile: it sets module + id to false
+            $this->sModule=$this->sModule ? $this->sModule : $aTmp['module'];
+            $this->sCacheID=$this->sCacheID ? $this->sCacheID : $aTmp['cacheid'];
         }
         return $this->_aCacheInfos;
     }
@@ -202,6 +217,7 @@ class AhCache {
      * @return array|boolean
      */
     private function _readCacheItem($sFile) {
+        chdir($this->_sCacheDir);
         if (file_exists($sFile)) {
             return unserialize(file_get_contents($sFile));
         }
@@ -215,8 +231,8 @@ class AhCache {
      */
     private function _getCacheFilename() {
         $sMyFile=md5($this->sCacheID);
-        if($this->_sCacheDirDivider && $this->_sCacheDirDivider>0){
-            $sMyFile=preg_replace('/([0-9a-f]{'.$this->_sCacheDirDivider.'})/', "$1/", $sMyFile);
+        if($this->_sCacheDirDivider && (int)$this->_sCacheDirDivider>0){
+            $sMyFile=preg_replace('/([0-9a-f]{'.(int)$this->_sCacheDirDivider.'})/', "$1/", $sMyFile);
         }
         $sMyFile.=".".$this->_sCacheExt;
         $sMyFile=str_replace("/.", ".", $sMyFile);
@@ -224,10 +240,6 @@ class AhCache {
         $this->_sCacheFile = $this->_sCacheDir . "/" . $this->sModule . "/" . $sMyFile;
     return $this->_sCacheFile;
     }
-
-    /* ----------------------------------------------------------------------
-      public funtions
-      ---------------------------------------------------------------------- */
 
     /**
      * helper function - remove empty cache directories up to module cache dir
@@ -237,15 +249,30 @@ class AhCache {
      * @return void
      */
     private function _removeEmptyCacheDir($sDir, $bShowOutput=false){
-        // echo __METHOD__."($sDir)<br>\n";
-        if (dirname($sDir) > $this->_sCacheDir . "/" . $this->sModule){
-            if (@rmdir(dirname($sFile))){
-                echo $bShowOutput ? 'REMOVED DIR  '.dirname($sFile) ."\n" : '';
-                $this->_removeEmptyCacheDir(dirname($sDir), $bShowOutput);
+        // echo $bShowOutput ? __METHOD__."($sDir)<br>\n" : '';
+        if ($sDir > $this->_sCacheDir . "/" . $this->sModule){
+            echo $bShowOutput ? "REMOVE DIR [$sDir] ... " : '';
+            if (is_dir($sDir)){
+                if (rmdir($sDir)){
+                    chdir($this->_sCacheDir);
+                    echo $bShowOutput ? "OK<br>\n" : '';
+                    usleep(20000); // 0.02 sec
+                    $this->_removeEmptyCacheDir(dirname($sDir), $bShowOutput);
+                } else {
+                    echo $bShowOutput ? "failed.<br>\n" : '';
+                    return false;
+                }
+            } else {
+                echo $bShowOutput ? "skip: not a directory.<br>\n" : '';
             }
+            return true;
         }
-        return true;
+        return false;
     }
+
+    /* ----------------------------------------------------------------------
+      public funtions
+      ---------------------------------------------------------------------- */
 
     // ----------------------------------------------------------------------
     /**
@@ -267,12 +294,12 @@ class AhCache {
     public function cleanup($iSec = false, $bShowOutput=false) {
         // quick and dirty
         $aData=$this->getCachedItems(false, array('ageOlder'=>$iSec));
-        echo $bShowOutput ? 'CLEANUP  '.count($aData) ." files\n" : '';
+        echo $bShowOutput ? 'CLEANUP  '.count($aData) ." files<br>\n" : '';
         if($aData){
             $aFiles=array_keys($aData);
             rsort($aFiles);
             foreach(array_keys($aData) as $sFile){
-                echo $bShowOutput ? 'DELETE '.$sFile ."\n" : '';
+                echo $bShowOutput ? 'DELETE '.$sFile ."<br>\n" : '';
                 unlink($sFile);
                 $this->_removeEmptyCacheDir(dirname($sFile), $bShowOutput);
             }
@@ -280,8 +307,12 @@ class AhCache {
         return true;
     }
 
+    // ----------------------------------------------------------------------
     /**
-     * get an array with cached data elements
+     * get an array with cached data elements.
+     * Remark: this method should be used in an admin interface or cronjob only.
+     * It makes a recursive filesystem scan and is quite slow.
+     * @since 2.4
      *
      * @param string  $sDir     full path of cache dir; default: false (auto detect cache dir)
 	 * @param array   $aFilter  filter; valid keys are
@@ -323,8 +354,8 @@ class AhCache {
                     $aData=$this->_readCacheItem($sEntry);
                     unset($aData['data']);
 
-                    $aData['_lifetime']=$aData['tsExpire']-date('U');
                     $aData['_age']=date('U')-filemtime($sEntry);
+                    $aData['_lifetime']=filemtime($sEntry) > filemtime($this->_sCacheRemovefile) ? $aData['tsExpire'] - date('U') : -1;
 
                     $bAdd=false;
 
@@ -334,7 +365,7 @@ class AhCache {
                     if(isset($aFilter['lifetimeBelow']) && ($aData['_lifetime']<$aFilter['lifetimeBelow'])){
                         $bAdd=true;
                     }
-                    if(isset($aFilter['lifetimeGreater']) && ($aData['_lifetime']<$aFilter['lifetimeGreater'])){
+                    if(isset($aFilter['lifetimeGreater']) && ($aData['_lifetime']>$aFilter['lifetimeGreater'])){
                         $bAdd=true;
                     }
                     if(isset($aFilter['ttlBelow']) && ($aData['iTtl']<$aFilter['ttlBelow'])){
@@ -360,18 +391,56 @@ class AhCache {
 
     // ----------------------------------------------------------------------
     /**
-     * public function delete - delete a single cachefile if it exist
+     * get a flat array of module names that saved a cache item already
+     * @since 2.5
+     * 
+     * @return array
+     */
+    public function getModules(){
+        $aReturn=array();
+        foreach(glob($this->_sCacheDir.'/*') as $sEntry){
+            if (is_dir($sEntry)){
+                $aReturn[]=basename($sEntry);
+            }
+        }
+        return $aReturn;
+    }
+
+    // ----------------------------------------------------------------------
+    /**
+     * delete a single cache item if it exist.
+     * It returns true if a cache item was deleted. It returns false if it
+     * does not exist (yet) or the deletion failed.
      * @return     boolean
      */
     public function delete() {
-        if (!file_exists($this->_sCacheFile))
+        if (!file_exists($this->_sCacheFile)){
             return false;
+        }
         if (unlink($this->_sCacheFile)) {
             $this->_aCacheInfos['data'] = false;
             $this->_aCacheInfos['stat'] = false;
             return true;
         }
         return false;
+    }
+    // ----------------------------------------------------------------------
+    /**
+     * delete all existing cached items of the set module
+     * Remark: this method should be used in an admin interface or cronjob only.
+     * It makes a recursive filesystem scan and is quite slow.
+     * 
+     * @since 2.6
+     * @param boolean   $bShowOutput   flag: show output? default: false (=no output)
+     * @return     boolean
+     */
+    public function deleteModule($bShowOutput=false) {
+        if (!$this->sModule){
+            return false;
+        }
+        $this->cleanup(0, $bShowOutput);
+        $this->removefileDelete();
+        return rmdir($this->_sCacheDir . "/" . $this->sModule);
     }
 
     // ----------------------------------------------------------------------
@@ -381,20 +450,30 @@ class AhCache {
      */
     public function dump() {
         echo "
-                <hr>
-                <strong>cache->dump()<br></strong>
-                <strong>module: </strong>" . $this->sModule . "<br>
-                <strong>ID: </strong>" . $this->sCacheID . "<br>
-                <strong>filename: </strong>" . $this->_sCacheFile;
-        if (!file_exists($this->_sCacheFile))
-            echo " (does not exist yet)";
-        echo "<br>
+            <!--<strong>".__METHOD__."()<br></strong>-->
+            <strong>module: </strong>" . $this->sModule . "<br>
+            <strong>ID: </strong>" . $this->sCacheID . "<br>
+            <strong>filename: </strong>" . $this->_sCacheFile."<br>
+            "
+            ;
+        if (file_exists($this->_sCacheFile)){
+            echo "
+                <strong>size: </strong>" . filesize($this->_sCacheFile). " byte<br>
+                <strong>created: </strong>" . filemtime($this->_sCacheFile) . " (" . date("d.m.y - H:i:s", filemtime($this->_sCacheFile)) . ")<br>
                 <strong>age: </strong>" . $this->getAge() . " s<br>
                 <strong>ttl: </strong>" . $this->getTtl() . " s<br>
-                <strong>expires: </strong>" . $this->getExpire() . " (" . date("d.m.y - H:i:s", $this->getExpire()) . ")<br>
-                <pre>";
-        print_r($this->_aCacheInfos);
-        echo "</pre><hr>";
+                ".($this->getTtl()<0 ? '' : "<strong>expires: </strong>" . $this->getExpire() . " (" . date("d.m.y - H:i:s", $this->getExpire()) . ")<br>")
+                ."<br>
+                <strong>data in the cache:</strong>
+                <pre>"
+            ;
+            echo htmlentities(print_r($this->_aCacheInfos, 1));
+            echo "</pre><hr>";
+        } else  {
+            echo "Cache file does not exist (yet).<br>
+                Maybe the _sDivider was changed in another cache instance.<br>
+                ";
+        }
         return true;
     }
 
@@ -461,8 +540,9 @@ class AhCache {
      * @return     int  expired time in seconds; negative if cache is not expired
      */
     public function iExpired() {
-        if (!$this->_tsExpire)
+        if (!$this->_tsExpire){
             return true;
+        }
         return date("U") - $this->_tsExpire;
     }
 
@@ -476,16 +556,43 @@ class AhCache {
      * @return  integer  time in sec how much the cache file is newer; negative if reference file is newer
      */
     public function isNewerThanFile($sRefFile) {
-        if (!file_exists($sRefFile))
+        if (!file_exists($sRefFile)){
             return false;
-        if (!isset($this->_aCacheInfos['stat']))
+        }
+        if (!isset($this->_aCacheInfos['stat'])){
             return false;
+        }
 
         $aTmp = stat($sRefFile);
         $iTimeRef = $aTmp['mtime'];
         
         //echo $this->_sCacheFile."<br>".$this->_aCacheInfos['stat']['mtime']."<br>".$iTimeRef."<br>".($this->_aCacheInfos['stat']['mtime'] - $iTimeRef);
         return $this->_aCacheInfos['stat']['mtime'] - $iTimeRef;
+    }
+
+    // ----------------------------------------------------------------------
+    /**
+     * load cache item from a given file - this is like reverse engineering 
+     * by reading data file; needed for a admin interface only
+     * 
+     * @since 2.6
+     * @param string  $sFile  filename with full path
+     * @return boolean
+     */
+    public function loadCachefile($sFile){
+        $this->_sCacheFile=false;
+        $this->sModule=false;
+        $this->sCacheID=false;
+        if(file_exists($sFile)){
+            $this->_sCacheFile=$sFile;
+            $this->_getAllCacheData();
+            // reverse engineered _sCacheDirDivider
+            $sRelfile=str_replace($this->_sCacheDir . "/" . $this->sModule, '', $this->_sCacheFile);
+            $sTmp=preg_replace('#^\/([0-9a-f]*)([/\.].*)#', '$1', $sRelfile);
+            $this->_sCacheDirDivider=strlen($sTmp);
+            return true;
+        }
+        return false;
     }
 
     // ----------------------------------------------------------------------
@@ -497,11 +604,35 @@ class AhCache {
         if (!isset($this->_aCacheInfos['data'])){
             $this->_getAllCacheData();
         }
-        if (!isset($this->_aCacheInfos['data']))
+        if (!isset($this->_aCacheInfos['data'])){
             return false;
+        }
         return $this->_aCacheInfos['data'];
     }
 
+    // ----------------------------------------------------------------------
+    /**
+     * delete module based remove file
+     *
+     * @since 2.6
+     * @return boolean
+     */
+    public function removefileDelete(){
+        if (file_exists($this->_sCacheRemovefile)){
+            return unlink($this->_sCacheRemovefile);
+        }
+        return false;
+    }
+    // ----------------------------------------------------------------------
+    /**
+     * make all cache items invalid by touching the remove file
+     *
+     * @since 2.6
+     * @return boolean
+     */
+    public function removefileTouch(){
+        return touch($this->_sCacheRemovefile);
+    }
     // ----------------------------------------------------------------------
     /**
      * public function setData($data) - set cachedata into cache object
@@ -522,8 +653,8 @@ class AhCache {
      * Remark: You additionally need to call the write() method to store a new ttl value with 
      * data in the filesystem
      * @since 2.0
-     * @param type $iTtl  ttl value in seconds
-     * @return     int  get ttl of cache
+     * @param   int  $iTtl  ttl value in seconds
+     * @return  int  get ttl of cache
      */
     public function setTtl($iTtl) {
         return $this->_iTtl = $iTtl;
@@ -532,18 +663,21 @@ class AhCache {
     // ----------------------------------------------------------------------
     /**
      * public function touch() - touch cachefile if it exist
-     * For cachedata with a ttl a new expiration will be set
+     * For cached data a new expiration based on existing ttl will be set
      * @return boolean 
      */
     public function touch() {
-        if (!file_exists($this->_sCacheFile))
+        if (!file_exists($this->_sCacheFile)){
             return false;
+        }
 
         // touch der Datei reicht nicht mehr, weil tsExpire verloren ginge
-        if (!$this->_iTtl)
+        if (!$this->_iTtl){
             $bReturn = touch($this->_sCacheFile);
-        else
+        }
+        else{
             $bReturn = $this->write();
+        }
 
         $this->_getAllCacheData();
 
@@ -555,9 +689,9 @@ class AhCache {
      * Write data into a cache. 
      * - data can be any serializable type, like string, array or object
      * - set ttl in s (from now); optional parameter
-     * @param      various  $data  data to store in cache
-     * @param      int      $iTtl  time in s if content cache expires (min. 0)
-     * @return     bool     success of write action
+     * @param      various  $data    data to store in cache
+     * @param      int      $iTtl    time in s if content cache expires (min. 0)
+     * @return     bool     success  of write action
      */
     public function write($data = false, $iTtl = -1) {
         if (!$this->_sCacheFile)

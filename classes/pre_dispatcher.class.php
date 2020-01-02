@@ -171,6 +171,10 @@ class preDispatcher{
 		}
 		foreach($aHeaders as $sHVar=>$sHValue){
 			header($sHVar.': '.$sHValue);
+			if(strtolower($sHVar)==='etag' && isset($aReqHeaders['If-None-Match']) && $sHValue===$aReqHeaders['If-None-Match']){
+				header('HTTP/1.1 304 Not Modified');
+				die('');
+			}
 		}
 		return true;
 	}
@@ -338,15 +342,34 @@ class preDispatcher{
 		}
 		
 		if(!$this->_oCache->isExpired()){
+			$aReqHeaders=apache_request_headers();
 			$iTtl=$this->_oCache->getTtl();
+
 			$iAgeOfCache=$this->_oCache->getAge();
 			$iLiftime=round($iAgeOfCache/$iTtl*100);
 			$this->addInfo('cache age '.$iAgeOfCache.'s');
 			$this->addInfo('ttl '.$iTtl.'s');
 			$this->addInfo('lifetime '.$iLiftime.'%');
 
-			$this->addInfo('Using Cache = YES :-)');
+			$this->addInfo('Using srv cache = YES :-)');
 			$aData=$this->_oCache->read();
+
+			// caching on client side
+			$iMaxAge=isset($this->aCfgCache['ttl']['max-age']) ? min($iTtl, $this->aCfgCache['ttl']['max-age']) : 0;
+			header('cache-control: max-age='.(int)$iMaxAge);
+			$this->addInfo('client cache = '.(int)$iMaxAge);
+
+			// set etag header value
+			$sEtagValue='pd-'.md5($aData['content']);
+			header('ETag: '.$sEtagValue);
+			$this->addInfo('ETag = '.$sEtagValue);
+
+			// detect if we need to send a 304 response without content
+			if(isset($aReqHeaders['If-None-Match']) && $sEtagValue==$aReqHeaders['If-None-Match']){
+				header('HTTP/1.1 304 Not Modified');
+				die('');
+			}
+
 			if(isset($aData['setheaders']) && count($aData['setheaders'])){
 				$this->renderCustomHeaders($aData['setheaders']);
 			}

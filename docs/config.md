@@ -29,12 +29,15 @@ The config dist file is prepared to detect a login to the C5 backend by a cookie
 		// caching ttl values
 		'ttl'=>array(
 
-			// default caching time in [s]
+			// default caching time on server in [s]
 			'_default'=>60*60*24*14,
 
+			// max. caching time on client side in [s] (used as http response header cache-control: max-age=...)
+			'max-age'=>120,
+
 			// regex of request uri to override a default
-			'^/my/more/dynamic/page$'=>60*60,
-			'^/some/nother/pages/.*'=>60*15,
+			'^/my/more/dynamic/page$'=>60,
+			'^/some/other/pages/.*'=>60*15,
 		),
 
 		// ------------------------------------------------------------
