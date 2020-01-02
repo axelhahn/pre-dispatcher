@@ -159,6 +159,22 @@ class preDispatcher{
 	}
 
 	/**
+	 * send additional http response headers
+	 * This method is used to set response headers for the delivered cached content.
+	 * @see getCachedContent
+	 *
+	 * @return bool (true)
+	 */
+	public function renderCustomHeaders($aHeaders){
+		if(!is_array($aHeaders)||!count($aHeaders)){
+			return false;
+		}
+		foreach($aHeaders as $sHVar=>$sHValue){
+			header($sHVar.': '.$sHValue);
+		}
+		return true;
+	}
+	/**
 	 * show log messages as http response headers (debug flag must be true)
 	 *
 	 * @return bool (true)
@@ -331,6 +347,9 @@ class preDispatcher{
 
 			$this->addInfo('Using Cache = YES :-)');
 			$aData=$this->_oCache->read();
+			if(isset($aData['setheaders']) && count($aData['setheaders'])){
+				$this->renderCustomHeaders($aData['setheaders']);
+			}
 			echo str_replace(
 				'</body',
 				$this->renderHeaders('fromcache').'</body',

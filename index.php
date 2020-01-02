@@ -32,11 +32,18 @@
 	function handleOutput($buffer){ 
 		global $oAhd;
 		
+		$aCustomHeaders=array(
+			'cache'=>'public, must-revalidate',
+			'cache-control'=>'max-age=120',
+			'ETag'=>'pd-'.md5($buffer),
+		);
 		$oAhd->doCache(array(
 			'url'=>$oAhd->getRefreshUrl(),
-			'header'=>apache_request_headers(),
+			'header_orig'=>apache_response_headers(),
+			'setheaders'=>$aCustomHeaders,
 			'content'=>$buffer,
 		));
+		$oAhd->renderCustomHeaders($aCustomHeaders);
 		$buffer=str_replace(
 			'</body',
 			$oAhd->renderHeaders().'</body',
