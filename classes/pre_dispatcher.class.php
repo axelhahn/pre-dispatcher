@@ -219,16 +219,30 @@ class preDispatcher{
 			}
 		}
 		if($sReturn){
+			$sDivId="predispatcher-".md5(date('U').'mysalt');
 			$sReturn='<div style="position: absolute; top: 1em; right: 1em; border: 2px solid rgba(0,0,0,0.2); background:'
 				. $aColors[$sMode]
-				. '; color:#fee; padding: 0.5em; max-width: 30em; z-index: 100000;">'
+				. '; color:#fee; padding: 0.5em; max-width: 30em; overflow: hidden; z-index: 100000;" id="'.$sDivId.'" ondblbclick="">'
+					. '<button onclick="document.getElementById(\''.$sDivId.'\').style.display=\'none\';" style="color:#f00; float: right;"> X </button>'
+					. '<button onclick="pdwMax();" style="color:#00a; float: right;"> [] </button>'
+					. '<button onclick="pdwMin();" style="color:#00a; float: right;"> _ </button>'
+					. '<div>'
 					. '<h3 style="margin:0; ">'.__CLASS__.':</h3>'
 					. '<button onclick="location.href=\''.$this->_sBaseUrl.$this->_sRequest.'\';" style="color:#008;">Page</button> ' 					
 					. '<button onclick="location.href=\''.$this->getRefreshUrl().'\';" style="color:#080;">Refresh</button> ' 
-					. '<button onclick="location.href=\''.$this->getNocacheUrl().'\';" style="color:#f00;">Delete</button><br>'
+					. '<button onclick="location.href=\''.$this->getNocacheUrl().'\';" style="color:#f00;">Delete</button>'
+					. '<br>'
 					. 'Total: <strong style="font-size: 130%;">'.(number_format(($iLastTime-$iStartTime)*1000, 2)).'ms</strong><br>'
 					. $sReturn
+					. '</div>'
 				. '</div>'
+				. '<script>'
+				.'var oPDWindow=document.getElementById(\''.$sDivId.'\');'
+				.'var pwdState=localStorage.getItem(\'pwdState\') ? localStorage.getItem(\'pwdState\') : \'min\';'
+				.'function pdwMin(){ oPDWindow.style.height=\'3em\';  oPDWindow.style.width=\'8em\'; localStorage.setItem(\'pwdState\', \'min\'); }'
+				.'function pdwMax(){ oPDWindow.style.height=\'auto\'; oPDWindow.style.width=\'auto\';  localStorage.setItem(\'pwdState\', \'max\');}'
+				.'if(pwdState==\'min\'){ pdwMin(); }'
+				.'</script>'
 			;
 		}
 		return $sReturn;
